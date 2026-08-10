@@ -1,0 +1,39 @@
+# ---- Secrets: never commit ----
+.env
+.env.*
+!.env.example
+*.pem
+*-credentials.json
+service-account*.json
+
+# ---- Node ----
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# ---- Runtime storage (uploads, manifests, result CSVs) ----
+storage/
+server/storage/
+vector_images/
+
+# ---- Python (legacy/) ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+legacy/**/storage/
+legacy/token_d2c.json
+legacy/drivetocloud_storage/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# ---- Editor / OS ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,41 @@
+# Render blueprint for the Vector Studio API.
+# The React frontend deploys separately to Vercel (see README).
+#
+# A persistent disk is required: uploaded images, job manifests and result CSVs
+# are written to APP_STORAGE_DIR and would otherwise vanish on every deploy.
+services:
+  - type: web
+    name: vectorstudio-api
+    runtime: node
+    plan: starter # Free plan sleeps after 15 min idle and would kill in-flight jobs.
+    rootDir: server
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # Job state is in-memory: exactly ONE instance must run, or status polling
+    # will intermittently hit an instance that does not know the job.
+    numInstances: 1
+    disk:
+      name: vectorstudio-storage
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: APP_STORAGE_DIR
+        value: /data
+      - key: WORKER_CONCURRENCY
+        value: "6"
+      # Set these in the Render dashboard — never commit real values.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: APP_ACCESS_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

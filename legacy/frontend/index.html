@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vector Image Bulk Processor</title>
+  <style>
+    :root {
+      --bg: #eef2f9;
+      --bg-deep: #e4eaf5;
+      --panel: #ffffff;
+      --panel-alt: #f8fafc;
+      --sidebar-1: #0b1220;
+      --sidebar-2: #131f38;
+      --text: #0f172a;
+      --muted: #5b6b85;
+      --muted-soft: #8494ab;
+      --accent: #0b57d0;
+      --accent-hover: #0847ad;
+      --accent-soft: #dbeafe;
+      --danger: #b91c1c;
+      --danger-soft: #fef2f2;
+      --danger-border: #fecaca;
+      --border: #dde4ee;
+      --border-strong: #c9d4e3;
+      --success: #15803d;
+      --success-soft: #ecfdf5;
+      --warn: #b45309;
+      --sidebar-w: 292px;
+      --radius: 14px;
+      --radius-sm: 9px;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow: 0 4px 16px rgba(2, 6, 23, 0.07);
+      --shadow-lg: 0 12px 34px rgba(2, 6, 23, 0.1);
+      --font: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      --mono: Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---------- Full-viewport app shell ---------- */
+    .app {
+      display: flex;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    /* ---------- Sidebar: fixed, flush to the left edge ---------- */
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: var(--sidebar-w);
+      background: linear-gradient(175deg, var(--sidebar-1) 0%, var(--sidebar-2) 100%);
+      color: #e8eefb;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      z-index: 20;
+      box-shadow: 4px 0 24px rgba(2, 6, 23, 0.16);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 9px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.32);
+      border-radius: 999px;
+    }
+    .sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+
+    .brand {
+      padding: 22px 22px 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      display: grid;
+      place-items: center;
+      font-size: 19px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.36);
+    }
+
+    .brand-text h1 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      color: #f8fafc;
+      line-height: 1.25;
+    }
+
+    .brand-text span {
+      display: block;
+      font-size: 0.755rem;
+      color: #94a3b8;
+      margin-top: 2px;
+      letter-spacing: 0.3px;
+    }
+
+    .side-section {
+      padding: 18px 22px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .side-section:last-of-type { border-bottom: none; }
+
+    .side-title {
+      margin: 0 0 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 1.1px;
+      text-transform: uppercase;
+      color: #7c8CA6;
+    }
+
+    .side-hint {
+      margin: 0 0 12px;
+      font-size: 0.79rem;
+      color: #93a3ba;
+      line-height: 1.45;
+    }
+
+    .menu { display: grid; gap: 7px; }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(255, 255, 255, 0.045);
+      color: #dbe4f3;
+      text-align: left;
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+    }
+
+    .menu-item .mi-icon {
+      font-size: 1rem;
+      width: 19px;
+      text-align: center;
+      flex-shrink: 0;
+      opacity: 0.9;
+    }
+
+    .menu-item:hover {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(96, 165, 250, 0.45);
+      color: #fff;
+    }
+
+    .menu-item:active { transform: translateY(1px); }
+
+    .menu-item.active {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      border-color: rgba(147, 197, 253, 0.6);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+    }
+
+    .field { display: grid; gap: 6px; margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+
+    .field > label {
+      margin: 0;
+      font-size: 0.79rem;
+      font-weight: 600;
+      color: #b6c4d8;
+      letter-spacing: 0.2px;
+    }
+
+    .field select {
+      width: 100%;
+      padding: 9px 32px 9px 11px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background-color: rgba(255, 255, 255, 0.07);
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath fill='%2394a3b8' d='M5.5 7 0 1.4 1.4 0 5.5 4.1 9.6 0 11 1.4z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 11px center;
+      color: #f1f5f9;
+      font: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+      appearance: none;
+      transition: border-color 0.18s ease, background-color 0.18s ease;
+    }
+
+    .field select:hover { border-color: rgba(148, 163, 184, 0.5); }
+
+    .field select:focus-visible {
+      outline: none;
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28);
+    }
+
+    .field select option { background: #16233c; color: #f1f5f9; }
+
+    .field-hint {
+      font-size: 0.72rem;
+      color: #8093ad;
+      line-height: 1.4;
+    }
+
+    .side-foot {
+      margin-top: auto;
+      padding: 15px 22px 18px;
+      border-top: 1px solid rgba(148, 163, 184, 0.14);
+      font-size: 0.73rem;
+      color: #74849c;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #64748b;
+      flex-shrink: 0;
+    }
+
+    .dot.on { background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2); }
+    .dot.off { background: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2); }
+
+    /* ---------- Main region: fills ALL remaining width ---------- */
+    .main {
+      flex: 1;
+      min-width: 0;
+      margin-left: var(--sidebar-w);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse 800px 420px at 78% -8%, #dce7fa 0%, transparent 62%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding: 16px 34px;
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-left h2 {
+      margin: 0;
+      font-size: 1.17rem;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .topbar-left p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 0.845rem;
+      max-width: 780px;
+    }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      font-size: 0.775rem;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .chip b { color: var(--text); font-weight: 700; }
+
+    /* Content fills the full width of the main region */
+    .content {
+      flex: 1;
+      width: 100%;
+      padding: 24px 34px 40px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 20px;
+      align-content: start;
+    }
+
+    /* On wide screens the workspace splits side-by-side and still spans full width */
+    @media (min-width: 1500px) {
+      .content {
+        grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+        align-content: start;
+      }
+      .card-config { grid-column: 1; }
+      .card-monitor { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 96px; }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #fdfefe 0%, var(--panel-alt) 100%);
+    }
+
+    .card-head h3 {
+      margin: 0;
+      font-size: 0.99rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-head .ch-icon { font-size: 1.02rem; }
+
+    .card-head p {
+      margin: 3px 0 0;
+      font-size: 0.815rem;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .card-body { padding: 20px; }
+
+    .section-label {
+      display: block;
+      font-size: 0.775rem;
+      font-weight: 700;
+      letter-spacing: 0.55px;
+      text-transform: uppercase;
+      color: var(--muted-soft);
+      margin: 0 0 8px;
+    }
+
+    .helper {
+      margin: 0 0 11px;
+      color: var(--muted);
+      font-size: 0.845rem;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+      border: none;
+    }
+
+    label { display: block; font-weight: 600; margin: 0 0 7px; font-size: 0.875rem; }
+
+    textarea, input[type="file"] {
+      width: 100%;
+      padding: 11px 13px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      font: inherit;
+      font-size: 0.885rem;
+      color: inherit;
+      background: #fff;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    textarea:focus, input[type="file"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.13);
+    }
+
+    textarea { min-height: 210px; resize: vertical; line-height: 1.55; }
+    textarea.small { min-height: 84px; }
+    textarea.mono { font-family: var(--mono); font-size: 0.83rem; }
+
+    input[type="file"] { cursor: pointer; padding: 9px 12px; }
+
+    input[type="file"]::file-selector-button {
+      border: 1px solid var(--border-strong);
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 7px 13px;
+      border-radius: 7px;
+      font: inherit;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 12px;
+      transition: background 0.18s ease, border-color 0.18s ease;
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-hover);
+    }
+
+    .panel[hidden] { display: none; }
+
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button, .download-link {
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 11px 19px;
+      background: linear-gradient(135deg, var(--accent) 0%, #1e40af 100%);
+      color: #fff;
+      font: inherit;
+      font-size: 0.885rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 2px 8px rgba(11, 87, 208, 0.26);
+      transition: transform 0.12s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+    }
+
+    button:hover:not(:disabled), .download-link:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(11, 87, 208, 0.32);
+    }
+
+    button:active:not(:disabled) { transform: translateY(0); }
+
+    button:focus-visible, .download-link:focus-visible,
+    .menu-item:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+    .btn-ghost {
+      background: #fff;
+      color: var(--muted);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--panel-alt);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    .download-link {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      box-shadow: 0 2px 8px rgba(21, 128, 61, 0.28);
+    }
+
+    .download-link:hover { box-shadow: 0 6px 16px rgba(21, 128, 61, 0.34); }
+
+    .file-note {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    /* ---------- Status / monitor ---------- */
+    .status-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.79rem;
+      font-weight: 700;
+      letter-spacing: 0.25px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      text-transform: capitalize;
+    }
+
+    .badge.idle { background: var(--panel-alt); color: var(--muted); }
+    .badge.queued, .badge.submitting {
+      background: #fffbeb; border-color: #fde68a; color: var(--warn);
+    }
+    .badge.processing {
+      background: var(--accent-soft); border-color: #bfdbfe; color: var(--accent-hover);
+    }
+    .badge.completed {
+      background: var(--success-soft); border-color: #bbf7d0; color: var(--success);
+    }
+    .badge.failed {
+      background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger);
+    }
+
+    .badge .pulse {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: currentColor; flex-shrink: 0;
+    }
+
+    .badge.processing .pulse, .badge.queued .pulse, .badge.submitting .pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.28; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    .job-id {
+      font-family: var(--mono);
+      font-size: 0.775rem;
+      color: var(--muted);
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      word-break: break-all;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .stat {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 13px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted-soft);
+    }
+
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat.ok .stat-value { color: var(--success); }
+    .stat.bad .stat-value { color: var(--danger); }
+
+    .progress-wrap { margin-top: 4px; }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      font-size: 0.815rem;
+      color: var(--muted);
+      margin-bottom: 7px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-meta b { color: var(--text); font-size: 0.9rem; }
+
+    .progress {
+      width: 100%;
+      height: 9px;
+      border-radius: 999px;
+      background: #e6ecf5;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .progress > div {
+      width: 0;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #3b82f6 0%, #0b57d0 100%);
+      transition: width 0.35s ease;
+    }
+
+    .meta {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.5;
+      word-break: break-word;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--success);
+      border-radius: 7px;
+      padding: 9px 12px;
+      font-family: var(--mono);
+    }
+
+    .subcard {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: #fff;
+      margin-top: 16px;
+    }
+
+    .subcard-head {
+      padding: 9px 13px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 0.79rem;
+      background: var(--panel-alt);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .errors {
+      max-height: 200px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: var(--mono);
+      font-size: 0.79rem;
+      line-height: 1.6;
+      padding: 12px 13px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .errors.error { background: var(--danger-soft); color: var(--danger); }
+
+    .result-preview-scroll { max-height: 400px; overflow: auto; }
+
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.815rem;
+    }
+
+    .result-table th, .result-table td {
+      border-bottom: 1px solid var(--border);
+      padding: 9px 12px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .result-table th {
+      background: var(--panel-alt);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted-soft);
+      white-space: nowrap;
+    }
+
+    .result-table tbody tr:last-child td { border-bottom: none; }
+    .result-table tbody tr:hover td { background: #f9fbfe; }
+    .result-table td.num { font-variant-numeric: tabular-nums; color: var(--muted); width: 46px; }
+    .result-table td.col-input { max-width: 300px; font-size: 0.785rem; }
+    .result-table td.col-err { max-width: 300px; color: var(--danger); font-size: 0.78rem; }
+    .result-table .empty { text-align: center; color: var(--muted-soft); padding: 30px 12px; font-style: italic; }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 0.71rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .pill.success { background: var(--success-soft); color: var(--success); border: 1px solid #bbf7d0; }
+    .pill.failed { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-border); }
+    .pill.neutral { background: var(--panel-alt); color: var(--muted); border: 1px solid var(--border); }
+
+    .variant-tag {
+      font-family: var(--mono);
+      font-size: 0.735rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .open-link {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .open-link:hover { text-decoration: underline; color: var(--accent-hover); }
+
+    .thumb {
+      width: 44px; height: 44px;
+      border-radius: 7px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      position: fixed;
+      left: 14px; top: 13px;
+      z-index: 40;
+      width: 42px; height: 42px;
+      padding: 0;
+      border-radius: 10px;
+      background: var(--sidebar-1);
+      font-size: 1.1rem;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .scrim {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.5);
+      z-index: 18;
+      backdrop-filter: blur(2px);
+    }
+
+    .scrim.show { display: block; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 1180px) {
+      .topbar, .content { padding-left: 24px; padding-right: 24px; }
+    }
+
+    @media (max-width: 1024px) {
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.26s ease;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; }
+      .sidebar-toggle { display: inline-flex; }
+      .topbar { padding-left: 68px; }
+      .topbar-left h2 { font-size: 1.05rem; }
+    }
+
+    @media (max-width: 680px) {
+      body { font-size: 14px; }
+      .topbar { padding: 13px 16px 13px 66px; }
+      .content { padding: 16px 16px 30px; gap: 16px; }
+      .card-body, .card-head { padding: 15px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      textarea { min-height: 160px; }
+      .result-preview-scroll { max-height: 320px; }
+      .actions button, .actions .download-link { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu" aria-expanded="false">☰</button>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="app">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">✦</div>
+          <div class="brand-text">
+            <h1>Vector Studio</h1>
+            <span>Bulk Image Stylizer</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-section">
+        <p class="side-title">Input Source</p>
+        <p class="side-hint">Choose how you want to supply images.</p>
+        <nav class="menu" aria-label="Input method selector">
+          <button type="button" class="menu-item active" data-view="upload">
+            <span class="mi-icon" aria-hidden="true">📁</span> Upload Images
+          </button>
+          <button type="button" class="menu-item" data-view="urls">
+            <span class="mi-icon" aria-hidden="true">🔗</span> Paste Image URLs
+          </button>
+          <button type="button" class="menu-item" data-view="csv">
+            <span class="mi-icon" aria-hidden="true">📄</span> Upload CSV
+          </button>
+        </nav>
+      </div>
+
+      <div class="side-section">
+        <p class="side-title">Generation</p>
+        <div class="field">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect">
+            <option value="gpt-image-1">gpt-image-1</option>
+            <option value="gpt-image-1-mini" selected>gpt-image-1-mini</option>
+            <option value="dall-e-2">dall-e-2</option>
+          </select>
+          <span class="field-hint">gpt-image models give the strongest stylization.</span>
+        </div>
+
+        <div class="field">
+          <label for="variantsCountSelect">Variants per image</label>
+          <select id="variantsCountSelect">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+          </select>
+          <span class="field-hint" id="variantsHint">Each variant is a separate generation.</span>
+        </div>
+      </div>
+
+      <div class="side-section">
+        <p class="side-title">Pose Control</p>
+        <div class="field">
+          <label for="poseVariationSelect">Pose Variation</label>
+          <select id="poseVariationSelect">
+            <option value="0" selected>Off — keep original pose</option>
+            <option value="1">On — vary pose per variant</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="poseStrengthSelect">Pose Strength</label>
+          <select id="poseStrengthSelect" disabled>
+            <option value="subtle" selected>Subtle</option>
+            <option value="medium">Medium</option>
+          </select>
+          <span class="field-hint">Enabled when pose variation is on.</span>
+        </div>
+      </div>
+
+      <div class="side-foot">
+        <span class="conn"><span class="dot" id="connDot"></span><span id="connText">Checking…</span></span>
+        <span>v1.0.0</span>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h2>Bulk Vectorize Images</h2>
+          <p>Applies a vector/cartoon illustration style to your photos while preserving the same face identity.</p>
+        </div>
+        <div class="chips">
+          <span class="chip">Model <b id="chipModel">gpt-image-1-mini</b></span>
+          <span class="chip">Variants <b id="chipVariants">1</b></span>
+          <span class="chip">Pose <b id="chipPose">Off</b></span>
+        </div>
+      </header>
+
+      <div class="content">
+        <!-- ---- Configure ---- -->
+        <section class="card card-config">
+          <div class="card-head">
+            <div>
+              <h3><span class="ch-icon" aria-hidden="true">⚙️</span> Configure Job</h3>
+              <p id="configSubtitle">Upload one or more local image files.</p>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <p class="section-label">Style Prompt <span style="text-transform:none;font-weight:600;">(optional)</span></p>
+            <p class="helper">Applied to every item in this job. Leave empty to use the default Prisma-style prompt.</p>
+            <label for="stylePromptInput" class="sr-only">Style prompt</label>
+            <textarea
+              id="stylePromptInput"
+              class="small"
+              maxlength="1000"
+              placeholder="Example: Keep exact same face and pose. Apply clean flat vector style with warm colors and subtle gradients."
+            ></textarea>
+            <div class="file-note"><span id="promptCount">0</span> / 1000 characters</div>
+
+            <hr class="divider" />
+
+            <!-- Upload panel -->
+            <div class="panel" id="panel-upload" data-panel="upload">
+              <p class="section-label">Upload Images</p>
+              <p class="helper">Select one or many local image files (PNG, JPG, WEBP).</p>
+              <label for="uploadImagesInput">Image files</label>
+              <input id="uploadImagesInput" type="file" accept="image/*" multiple />
+              <div class="file-note" id="uploadNote">No files selected.</div>
+              <div class="actions">
+                <button id="startUploadBtn" type="button"><span aria-hidden="true">▶</span> Start Vectorize</button>
+                <button id="clearUploadBtn" type="button" class="btn-ghost">Clear</button>
+              </div>
+            </div>
+
+            <!-- URLs panel -->
+            <div class="panel" id="panel-urls" data-panel="urls" hidden>
+              <p class="section-label">Paste Image URLs</p>
+              <p class="helper">One image URL per line. Large lists (3000+) are supported.</p>
+              <label for="urlsOnlyInput">Image URLs</label>
+              <textarea id="urlsOnlyInput" class="mono" placeholder="https://example.com/image-1.jpg&#10;https://example.com/image-2.png"></textarea>
+              <div class="file-note"><span id="urlCount">0</span> URLs detected.</div>
+              <div class="actions">
+                <button id="startUrlsBtn" type="button"><span aria-hidden="true">▶</span> Start Vectorize</button>
+                <button id="clearUrlsBtn" type="button" class="btn-ghost">Clear</button>
+              </div>
+            </div>
+
+            <!-- CSV panel -->
+            <div class="panel" id="panel-csv" data-panel="csv" hidden>
+              <p class="section-label">Upload CSV</p>
+              <p class="helper">Supports an <code>input_image_url</code> header column, or plain links in the first column.</p>
+              <label for="csvOnlyInput">CSV file</label>
+              <input id="csvOnlyInput" type="file" accept=".csv,text/csv" />
+              <div class="file-note" id="csvNote">No file selected.</div>
+              <div class="actions">
+                <button id="startCsvBtn" type="button"><span aria-hidden="true">▶</span> Start Vectorize</button>
+                <button id="clearCsvBtn" type="button" class="btn-ghost">Clear</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Monitor ---- -->
+        <section class="card card-monitor">
+          <div class="card-head">
+            <div>
+              <h3><span class="ch-icon" aria-hidden="true">📊</span> Job Progress</h3>
+              <p>Live status, results, and download.</p>
+            </div>
+            <a id="downloadLink" class="download-link" href="#" hidden><span aria-hidden="true">⬇</span> Download CSV</a>
+          </div>
+
+          <div class="card-body">
+            <div class="status-head">
+              <span class="badge idle" id="statusBadge"><span class="pulse"></span><span id="statusText">Idle</span></span>
+              <span class="job-id" id="jobIdText">No active job</span>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <div class="stat-label">Total</div>
+                <div class="stat-value" id="statTotal">0</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Processed</div>
+                <div class="stat-value" id="statProcessed">0</div>
+              </div>
+              <div class="stat ok">
+                <div class="stat-label">Succeeded</div>
+                <div class="stat-value" id="statSucceeded">0</div>
+              </div>
+              <div class="stat bad">
+                <div class="stat-label">Failed</div>
+                <div class="stat-value" id="statFailed">0</div>
+              </div>
+            </div>
+
+            <div class="progress-wrap">
+              <div class="progress-meta">
+                <span id="progressText">Processed 0 of 0</span>
+                <b id="progressPct">0%</b>
+              </div>
+              <div class="progress"><div id="progressBar"></div></div>
+            </div>
+
+            <div class="meta" id="archivedPathText" hidden></div>
+
+            <div class="subcard">
+              <div class="subcard-head">
+                <span>Results</span>
+                <span id="resultPreviewHeader">0 rows</span>
+              </div>
+              <div class="result-preview-scroll">
+                <table class="result-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Input</th>
+                      <th>Status</th>
+                      <th>Variant</th>
+                      <th>Output</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody id="resultTableBody">
+                    <tr><td colspan="6" class="empty">No rows yet — start a job to see live results.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="subcard">
+              <div class="subcard-head">
+                <span>Errors</span>
+                <span id="errorCountText">0</span>
+              </div>
+              <pre class="errors" id="errorsBox">No errors.</pre>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const menuButtons = Array.from(document.querySelectorAll(".menu-item"));
+    const panels = Array.from(document.querySelectorAll(".panel"));
+
+    const uploadImagesInput = document.getElementById("uploadImagesInput");
+    const urlsOnlyInput = document.getElementById("urlsOnlyInput");
+    const csvOnlyInput = document.getElementById("csvOnlyInput");
+    const stylePromptInput = document.getElementById("stylePromptInput");
+    const modelSelect = document.getElementById("modelSelect");
+    const variantsCountSelect = document.getElementById("variantsCountSelect");
+    const poseVariationSelect = document.getElementById("poseVariationSelect");
+    const poseStrengthSelect = document.getElementById("poseStrengthSelect");
+
+    const startUploadBtn = document.getElementById("startUploadBtn");
+    const startUrlsBtn = document.getElementById("startUrlsBtn");
+    const startCsvBtn = document.getElementById("startCsvBtn");
+    const clearUploadBtn = document.getElementById("clearUploadBtn");
+    const clearUrlsBtn = document.getElementById("clearUrlsBtn");
+    const clearCsvBtn = document.getElementById("clearCsvBtn");
+    const allStartButtons = [startUploadBtn, startUrlsBtn, startCsvBtn];
+
+    const statusBadge = document.getElementById("statusBadge");
+    const statusText = document.getElementById("statusText");
+    const jobIdText = document.getElementById("jobIdText");
+    const progressText = document.getElementById("progressText");
+    const progressPct = document.getElementById("progressPct");
+    const progressBar = document.getElementById("progressBar");
+    const downloadLink = document.getElementById("downloadLink");
+    const archivedPathText = document.getElementById("archivedPathText");
+    const errorsBox = document.getElementById("errorsBox");
+    const errorCountText = document.getElementById("errorCountText");
+    const resultPreviewHeader = document.getElementById("resultPreviewHeader");
+    const resultTableBody = document.getElementById("resultTableBody");
+
+    const statTotal = document.getElementById("statTotal");
+    const statProcessed = document.getElementById("statProcessed");
+    const statSucceeded = document.getElementById("statSucceeded");
+    const statFailed = document.getElementById("statFailed");
+
+    const chipModel = document.getElementById("chipModel");
+    const chipVariants = document.getElementById("chipVariants");
+    const chipPose = document.getElementById("chipPose");
+    const configSubtitle = document.getElementById("configSubtitle");
+    const promptCount = document.getElementById("promptCount");
+    const urlCount = document.getElementById("urlCount");
+    const uploadNote = document.getElementById("uploadNote");
+    const csvNote = document.getElementById("csvNote");
+    const connDot = document.getElementById("connDot");
+    const connText = document.getElementById("connText");
+
+    const sidebar = document.getElementById("sidebar");
+    const sidebarToggle = document.getElementById("sidebarToggle");
+    const scrim = document.getElementById("scrim");
+
+    let activeJobId = null;
+    let pollHandle = null;
+
+    const SUBTITLES = {
+      upload: "Upload one or more local image files.",
+      urls: "Paste image URLs, one per line.",
+      csv: "Upload a CSV containing image links."
+    };
+
+    /* ---------- Sidebar / navigation ---------- */
+    const setActiveView = (view) => {
+      menuButtons.forEach((button) => {
+        const isActive = button.dataset.view === view;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-current", isActive ? "true" : "false");
+      });
+      panels.forEach((panel) => {
+        panel.hidden = panel.dataset.panel !== view;
+      });
+      configSubtitle.textContent = SUBTITLES[view] || "";
+    };
+
+    const closeSidebar = () => {
+      sidebar.classList.remove("open");
+      scrim.classList.remove("show");
+      sidebarToggle.setAttribute("aria-expanded", "false");
+    };
+
+    sidebarToggle.addEventListener("click", () => {
+      const open = sidebar.classList.toggle("open");
+      scrim.classList.toggle("show", open);
+      sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
+    scrim.addEventListener("click", closeSidebar);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeSidebar();
+    });
+
+    /* ---------- Chips / live config reflection ---------- */
+    const syncChips = () => {
+      chipModel.textContent = modelSelect.value;
+      chipVariants.textContent = variantsCountSelect.value;
+      const poseOn = poseVariationSelect.value === "1";
+      chipPose.textContent = poseOn ? `On (${poseStrengthSelect.value})` : "Off";
+      poseStrengthSelect.disabled = !poseOn;
+    };
+
+    [modelSelect, variantsCountSelect, poseVariationSelect, poseStrengthSelect]
+      .forEach((el) => el.addEventListener("change", syncChips));
+
+    stylePromptInput.addEventListener("input", () => {
+      promptCount.textContent = String(stylePromptInput.value.length);
+    });
+
+    urlsOnlyInput.addEventListener("input", () => {
+      const count = urlsOnlyInput.value.split("\n").filter((line) => line.trim()).length;
+      urlCount.textContent = String(count);
+    });
+
+    uploadImagesInput.addEventListener("change", () => {
+      const files = Array.from(uploadImagesInput.files || []);
+      uploadNote.textContent = files.length === 0
+        ? "No files selected."
+        : `${files.length} file${files.length === 1 ? "" : "s"} selected.`;
+    });
+
+    csvOnlyInput.addEventListener("change", () => {
+      const file = csvOnlyInput.files && csvOnlyInput.files[0];
+      csvNote.textContent = file ? `Selected: ${file.name}` : "No file selected.";
+    });
+
+    clearUploadBtn.addEventListener("click", () => {
+      uploadImagesInput.value = "";
+      uploadNote.textContent = "No files selected.";
+    });
+
+    clearUrlsBtn.addEventListener("click", () => {
+      urlsOnlyInput.value = "";
+      urlCount.textContent = "0";
+    });
+
+    clearCsvBtn.addEventListener("click", () => {
+      csvOnlyInput.value = "";
+      csvNote.textContent = "No file selected.";
+    });
+
+    /* ---------- Status helpers ---------- */
+    const stopPolling = () => {
+      if (pollHandle) {
+        clearInterval(pollHandle);
+        pollHandle = null;
+      }
+    };
+
+    const setStatus = (label, state) => {
+      statusText.textContent = label;
+      statusBadge.className = `badge ${state || "idle"}`;
+    };
+
+    const setButtonsDisabled = (disabled) => {
+      allStartButtons.forEach((button) => { button.disabled = disabled; });
+    };
+
+    const resetOutput = () => {
+      progressBar.style.width = "0%";
+      progressText.textContent = "Processed 0 of 0";
+      progressPct.textContent = "0%";
+      statTotal.textContent = "0";
+      statProcessed.textContent = "0";
+      statSucceeded.textContent = "0";
+      statFailed.textContent = "0";
+      errorsBox.classList.remove("error");
+      errorsBox.textContent = "No errors.";
+      errorCountText.textContent = "0";
+      resultPreviewHeader.textContent = "0 rows";
+      resultTableBody.innerHTML = '<tr><td colspan="6" class="empty">No rows yet — start a job to see live results.</td></tr>';
+      downloadLink.hidden = true;
+      downloadLink.removeAttribute("href");
+      archivedPathText.hidden = true;
+      archivedPathText.textContent = "";
+    };
+
+    const escapeHtml = (value) => String(value === null || value === undefined ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+    const renderResultRows = (rows, totalRows) => {
+      resultPreviewHeader.textContent = `${totalRows || 0} row${(totalRows || 0) === 1 ? "" : "s"}`;
+      if (!rows || rows.length === 0) {
+        resultTableBody.innerHTML = '<tr><td colspan="6" class="empty">No rows yet — start a job to see live results.</td></tr>';
+        return;
+      }
+
+      resultTableBody.innerHTML = rows.map((row) => {
+        const idx = Number(row.index ?? 0) + 1;
+        const inputImage = escapeHtml(row.input_image || "");
+        const status = String(row.status || "");
+        const statusClass = status === "success" ? "success" : (status === "failed" ? "failed" : "neutral");
+        const variantIndex = escapeHtml(row.variant_index || "");
+        const variantName = escapeHtml(row.variant_name || "");
+        const variant = variantIndex || variantName
+          ? `<span class="variant-tag">#${variantIndex} ${variantName}</span>`
+          : "-";
+        const url = row.generated_image ? escapeHtml(row.generated_image) : "";
+        const output = url
+          ? `<img class="thumb" src="${url}" alt="" loading="lazy" />` +
+            `<a class="open-link" href="${url}" target="_blank" rel="noopener noreferrer">Open ↗</a>`
+          : "-";
+        const errorMessage = escapeHtml(row.error || "");
+
+        return `<tr>
+            <td class="num">${idx}</td>
+            <td class="col-input">${inputImage || "-"}</td>
+            <td><span class="pill ${statusClass}">${escapeHtml(status) || "pending"}</span></td>
+            <td>${variant}</td>
+            <td>${output}</td>
+            <td class="col-err">${errorMessage || "-"}</td>
+          </tr>`;
+      }).join("");
+    };
+
+    const renderErrors = (errors, totalErrors) => {
+      errorCountText.textContent = String(totalErrors || 0);
+      if (!errors || errors.length === 0) {
+        errorsBox.classList.remove("error");
+        errorsBox.textContent = totalErrors > 0
+          ? `${totalErrors} errors recorded (showing none).`
+          : "No errors.";
+        return;
+      }
+
+      errorsBox.classList.add("error");
+      const lines = errors.map((item, idx) => {
+        const input = item.input_image || "(unknown input)";
+        const message = item.error_message || "Unknown error";
+        return `${idx + 1}. ${input}\n   ${message}`;
+      });
+
+      const suffix = totalErrors > errors.length
+        ? `\n\n... and ${totalErrors - errors.length} more errors`
+        : "";
+      errorsBox.textContent = lines.join("\n") + suffix;
+    };
+
+    const updateProgress = (processed, total) => {
+      const safeProcessed = Number(processed) || 0;
+      const safeTotal = Number(total) || 0;
+      progressText.textContent = `Processed ${safeProcessed} of ${safeTotal}`;
+      const ratio = safeTotal > 0 ? (safeProcessed / safeTotal) * 100 : 0;
+      const clamped = Math.min(100, Math.max(0, ratio));
+      progressBar.style.width = `${clamped}%`;
+      progressPct.textContent = `${Math.round(clamped)}%`;
+      statTotal.textContent = String(safeTotal);
+      statProcessed.textContent = String(safeProcessed);
+    };
+
+    /* ---------- Job polling ---------- */
+    const pollJob = async () => {
+      if (!activeJobId) return;
+
+      try {
+        const response = await fetch(`/jobs/${activeJobId}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.detail || "Failed to fetch job status");
+        }
+
+        setStatus(payload.status || "unknown", payload.status);
+        updateProgress(payload.processed, payload.total);
+        statSucceeded.textContent = String(payload.succeeded || 0);
+        statFailed.textContent = String(payload.failed || 0);
+
+        if (payload.selected_model) chipModel.textContent = payload.selected_model;
+        if (payload.selected_variants_count) chipVariants.textContent = payload.selected_variants_count;
+        chipPose.textContent = payload.selected_pose_variation_enabled
+          ? `On (${payload.selected_pose_strength || "subtle"})`
+          : "Off";
+
+        renderErrors(payload.errors, payload.total_errors || 0);
+        renderResultRows(payload.result_rows, payload.total_result_rows || 0);
+
+        if (payload.result_ready && payload.download_url) {
+          downloadLink.hidden = false;
+          downloadLink.href = payload.download_url;
+        }
+
+        if (payload.archived_result_csv_path) {
+          archivedPathText.hidden = false;
+          archivedPathText.textContent = `Archived CSV: ${payload.archived_result_csv_path}`;
+        }
+
+        if (payload.status === "completed" || payload.status === "failed") {
+          stopPolling();
+          setButtonsDisabled(false);
+        }
+      } catch (error) {
+        stopPolling();
+        setButtonsDisabled(false);
+        errorsBox.classList.add("error");
+        errorsBox.textContent = error.message;
+        setStatus("Poll failed", "failed");
+      }
+    };
+
+    /* ---------- Submit ---------- */
+    const submitJob = async ({ images = [], urlsText = "", csvFile = null }) => {
+      stopPolling();
+      resetOutput();
+      setButtonsDisabled(true);
+      setStatus("Submitting", "submitting");
+
+      const formData = new FormData();
+      images.forEach((file) => formData.append("images", file));
+      formData.append("urls_text", urlsText.trim());
+      if (csvFile) formData.append("csv_file", csvFile);
+      formData.append("style_prompt", stylePromptInput.value.trim());
+      formData.append("model", modelSelect.value);
+      formData.append("variants_count", variantsCountSelect.value);
+      formData.append("pose_variation", poseVariationSelect.value === "1" ? "true" : "false");
+      formData.append("pose_strength", poseStrengthSelect.value);
+
+      try {
+        const response = await fetch("/jobs", { method: "POST", body: formData });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.detail || "Failed to create job");
+        }
+
+        activeJobId = payload.job_id;
+        jobIdText.textContent = activeJobId;
+        statTotal.textContent = String(payload.total || 0);
+        setStatus(payload.status || "queued", payload.status || "queued");
+
+        await pollJob();
+        pollHandle = setInterval(pollJob, 2500);
+      } catch (error) {
+        setButtonsDisabled(false);
+        setStatus("Failed to start", "failed");
+        errorsBox.classList.add("error");
+        errorsBox.textContent = error.message;
+      }
+    };
+
+    startUploadBtn.addEventListener("click", async () => {
+      const files = Array.from(uploadImagesInput.files || []);
+      if (files.length === 0) {
+        alert("Please select at least one image file.");
+        return;
+      }
+      await submitJob({ images: files });
+    });
+
+    startUrlsBtn.addEventListener("click", async () => {
+      const urlsText = urlsOnlyInput.value.trim();
+      if (!urlsText) {
+        alert("Please paste one or more image URLs.");
+        return;
+      }
+      await submitJob({ urlsText });
+    });
+
+    startCsvBtn.addEventListener("click", async () => {
+      const csvFile = csvOnlyInput.files && csvOnlyInput.files.length > 0 ? csvOnlyInput.files[0] : null;
+      if (!csvFile) {
+        alert("Please choose a CSV file.");
+        return;
+      }
+      await submitJob({ csvFile });
+    });
+
+    menuButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setActiveView(button.dataset.view);
+        if (window.matchMedia("(max-width: 1024px)").matches) closeSidebar();
+      });
+    });
+
+    /* ---------- Health indicator ---------- */
+    const checkHealth = async () => {
+      try {
+        const response = await fetch("/health");
+        if (!response.ok) throw new Error("unhealthy");
+        connDot.className = "dot on";
+        connText.textContent = "Connected";
+      } catch {
+        connDot.className = "dot off";
+        connText.textContent = "Offline";
+      }
+    };
+
+    setActiveView("upload");
+    syncChips();
+    checkHealth();
+    setInterval(checkHealth, 30000);
+  </script>
+</body>
+</html>
