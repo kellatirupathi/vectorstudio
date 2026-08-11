@@ -51,50 +51,12 @@ a {
   flex-direction: column;
 }
 
-.studio-header {
-  padding: 32px 20px 8px;
-  text-align: center;
-}
-
-.studio-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  text-align: left;
-}
-
-.studio-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 1.25rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.studio-title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-
-.studio-tagline {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
 .studio-main {
   flex: 1;
   width: 100%;
   max-width: var(--max-w);
   margin: 0 auto;
-  padding: 16px 20px 48px;
+  padding: 32px 20px 48px;
 }
 
 /* ============ Panels ============ */
@@ -509,13 +471,8 @@ a {
 
 /* ============ Responsive ============ */
 @media (max-width: 640px) {
-  .studio-header {
+  .studio-main {
     padding-top: 24px;
-  }
-
-  .studio-brand {
-    flex-direction: column;
-    text-align: center;
   }
 
   .settings-row {
