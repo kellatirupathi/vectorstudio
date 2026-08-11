@@ -67,15 +67,33 @@ const authHeaders = (): Record<string, string> => {
   return token ? { "x-access-token": token } : {};
 };
 
+const formatRequestError = (error: unknown, response?: Response): string => {
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+    return "Cannot reach the API. The server may be waking up or restarting — wait a moment and try again.";
+  }
+  if (response?.status === 404) {
+    return "Job not found. The server likely restarted and cleared in-memory jobs — start a new batch.";
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+    });
+  } catch (error) {
+    throw new Error(formatRequestError(error));
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error((payload as { error?: string }).error ?? `Request failed (${response.status})`);
+    throw new Error(
+      formatRequestError(new Error((payload as { error?: string }).error ?? `Request failed (${response.status})`), response),
+    );
   }
   return payload as T;
 };
@@ -89,15 +107,22 @@ export const fetchJob = (jobId: string): Promise<JobDetail> =>
   request<JobDetail>(`/api/jobs/${jobId}`);
 
 export const createJob = async (formData: FormData): Promise<JobDetail> => {
-  const response = await fetch(`${API_BASE}/api/jobs`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/jobs`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    });
+  } catch (error) {
+    throw new Error(formatRequestError(error));
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error((payload as { error?: string }).error ?? "Failed to create job");
+    throw new Error(
+      formatRequestError(new Error((payload as { error?: string }).error ?? "Failed to create job"), response),
+    );
   }
   return payload as JobDetail;
 };

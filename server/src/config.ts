@@ -41,8 +41,8 @@ export const DOWNLOAD_TIMEOUT_MS = num(process.env.DOWNLOAD_TIMEOUT_SECONDS, 30)
 export const DOWNLOAD_MAX_RETRIES = num(process.env.DOWNLOAD_MAX_RETRIES, 4);
 export const MAX_DOWNLOAD_BYTES = num(process.env.MAX_DOWNLOAD_BYTES, 20 * 1024 * 1024);
 
-/** Images processed concurrently. Set to 1 for strict one-by-one. */
-export const WORKER_CONCURRENCY = Math.max(1, num(process.env.WORKER_CONCURRENCY, 6));
+/** Images processed concurrently. Free Render (~512MB) should use 2-3. */
+export const WORKER_CONCURRENCY = Math.max(1, num(process.env.WORKER_CONCURRENCY, 3));
 
 export const JOB_TTL_MS = num(process.env.JOB_TTL_SECONDS, 604800) * 1000;
 

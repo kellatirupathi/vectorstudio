@@ -11,21 +11,17 @@ const app = express();
 
 fs.mkdirSync(STORAGE_DIR, { recursive: true });
 
-app.use(
-  cors(
-    ALLOWED_ORIGINS.length === 0
-      ? {}
-      : {
-          origin: (origin, callback) => {
-            if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-              callback(null, true);
-              return;
-            }
-            callback(new Error(`Origin ${origin} not allowed by CORS.`));
-          },
-        },
-  ),
-);
+const corsOptions: cors.CorsOptions =
+  ALLOWED_ORIGINS.length === 0
+    ? {}
+    : {
+        origin: ALLOWED_ORIGINS,
+        methods: ["GET", "POST", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "x-access-token"],
+      };
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "5mb" }));
 
@@ -62,7 +58,7 @@ app.use((error: any, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(
     JSON.stringify({
       level: "INFO",

@@ -19,7 +19,7 @@ services:
       - key: APP_STORAGE_DIR
         value: /opt/render/project/src/server/storage
       - key: WORKER_CONCURRENCY
-        value: "6"
+        value: "3"
       - key: OPENAI_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
