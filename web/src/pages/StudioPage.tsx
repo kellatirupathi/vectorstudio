@@ -151,16 +151,6 @@ export const StudioPage = (): JSX.Element => {
 
   return (
     <div className="studio">
-      <header className="studio-header">
-        <div className="studio-brand">
-          <div className="studio-mark">V</div>
-          <div>
-            <h1 className="studio-title">Vector Studio</h1>
-            <p className="studio-tagline">Bulk vector-style avatars from your photos</p>
-          </div>
-        </div>
-      </header>
-
       <main className="studio-main">
         {!tokenSaved ? (
           <section className="panel panel-token">
