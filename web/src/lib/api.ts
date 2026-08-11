@@ -1,19 +1,6 @@
-export type JobStatus = "queued" | "processing" | "completed" | "failed";
+export type BatchStatus = "idle" | "queued" | "processing" | "completed" | "failed";
 
-export type JobSummary = {
-  jobId: string;
-  name: string;
-  status: JobStatus;
-  total: number;
-  processed: number;
-  succeeded: number;
-  failed: number;
-  createdAt: string;
-  selectedModel: string;
-  selectedVariantsCount: number;
-};
-
-export type JobResultRow = {
+export type BatchResultRow = {
   index: number;
   inputImage: string;
   generatedImage: string;
@@ -24,32 +11,33 @@ export type JobResultRow = {
   variantName: string;
 };
 
-export type JobError = {
+export type BatchError = {
   inputImage: string;
   errorMessage: string;
   timestamp: string;
 };
 
-export type JobDetail = JobSummary & {
-  updatedAt: string;
-  completedAt: string | null;
-  failureReason: string | null;
-  selectedTransformMode: string;
-  selectedStylePromptEnabled: boolean;
-  selectedPoseVariationEnabled: boolean;
-  selectedPoseStrength: string;
-  resultReady: boolean;
-  errors: JobError[];
-  totalErrors: number;
-  resultRows: JobResultRow[];
-  totalResultRows: number;
-};
-
-export type Stats = {
-  totalJobs: number;
+export type BatchState = {
+  status: BatchStatus;
+  total: number;
+  processed: number;
   succeeded: number;
   failed: number;
-  images: number;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+  failureReason?: string | null;
+  selectedModel?: string;
+  selectedVariantsCount?: number;
+  selectedTransformMode?: string;
+  selectedStylePromptEnabled?: boolean;
+  selectedPoseVariationEnabled?: boolean;
+  selectedPoseStrength?: string;
+  resultReady: boolean;
+  errors: BatchError[];
+  totalErrors: number;
+  resultRows: BatchResultRow[];
+  totalResultRows: number;
 };
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -67,12 +55,9 @@ const authHeaders = (): Record<string, string> => {
   return token ? { "x-access-token": token } : {};
 };
 
-const formatRequestError = (error: unknown, response?: Response): string => {
+const formatRequestError = (error: unknown): string => {
   if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
-    return "Cannot reach the API. The server may be waking up or restarting — wait a moment and try again.";
-  }
-  if (response?.status === 404) {
-    return "Job not found. The server likely restarted and cleared in-memory jobs — start a new batch.";
+    return "Cannot reach the API. The server may be waking up — wait a moment and try again.";
   }
   if (error instanceof Error) return error.message;
   return String(error);
@@ -92,24 +77,20 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      formatRequestError(new Error((payload as { error?: string }).error ?? `Request failed (${response.status})`), response),
+      formatRequestError(
+        new Error((payload as { error?: string }).error ?? `Request failed (${response.status})`),
+      ),
     );
   }
   return payload as T;
 };
 
-export const fetchStats = (): Promise<Stats> => request<Stats>("/api/jobs/stats");
+export const fetchBatch = (): Promise<BatchState> => request<BatchState>("/api/batch");
 
-export const fetchJobs = (): Promise<{ jobs: JobSummary[] }> =>
-  request<{ jobs: JobSummary[] }>("/api/jobs");
-
-export const fetchJob = (jobId: string): Promise<JobDetail> =>
-  request<JobDetail>(`/api/jobs/${jobId}`);
-
-export const createJob = async (formData: FormData): Promise<JobDetail> => {
+export const startBatch = async (formData: FormData): Promise<BatchState> => {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/jobs`, {
+    response = await fetch(`${API_BASE}/api/batch`, {
       method: "POST",
       headers: authHeaders(),
       body: formData,
@@ -121,23 +102,26 @@ export const createJob = async (formData: FormData): Promise<JobDetail> => {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      formatRequestError(new Error((payload as { error?: string }).error ?? "Failed to create job"), response),
+      formatRequestError(
+        new Error((payload as { error?: string }).error ?? "Failed to start batch"),
+      ),
     );
   }
-  return payload as JobDetail;
+  return payload as BatchState;
 };
 
-export const downloadCsvUrl = (jobId: string): string => `${API_BASE}/api/jobs/${jobId}/result.csv`;
+export const clearBatch = (): Promise<BatchState> =>
+  request<BatchState>("/api/batch", { method: "DELETE" });
 
-export const downloadCsv = async (jobId: string): Promise<void> => {
-  const response = await fetch(downloadCsvUrl(jobId), { headers: authHeaders() });
+export const downloadCsv = async (): Promise<void> => {
+  const response = await fetch(`${API_BASE}/api/batch/result.csv`, { headers: authHeaders() });
   if (!response.ok) throw new Error("CSV is not ready yet");
 
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${jobId}_result.csv`;
+  link.download = "vector_results.csv";
   document.body.appendChild(link);
   link.click();
   link.remove();

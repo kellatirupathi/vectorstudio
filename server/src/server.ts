@@ -4,8 +4,9 @@ import cors from "cors";
 import express from "express";
 
 import { ALLOWED_ORIGINS, APP_ACCESS_TOKEN, PORT, STORAGE_DIR, WORKER_CONCURRENCY } from "./config.js";
-import jobsRouter from "./routes/jobs.js";
-import { startSweeper } from "./services/jobStore.js";
+import batchRouter from "./routes/batch.js";
+import { loadBatchFromDisk } from "./services/batchStore.js";
+import { resumeBatchIfNeeded } from "./services/batchRunner.js";
 
 const app = express();
 
@@ -51,7 +52,7 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-app.use("/api/jobs", jobsRouter);
+app.use("/api/batch", batchRouter);
 
 app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(JSON.stringify({ level: "ERROR", message: String(error?.message ?? error) }));
@@ -59,6 +60,8 @@ app.use((error: any, _req: express.Request, res: express.Response, _next: expres
 });
 
 app.listen(PORT, "0.0.0.0", () => {
+  loadBatchFromDisk();
+  resumeBatchIfNeeded();
   console.log(
     JSON.stringify({
       level: "INFO",
@@ -69,5 +72,4 @@ app.listen(PORT, "0.0.0.0", () => {
       authEnabled: Boolean(APP_ACCESS_TOKEN),
     }),
   );
-  startSweeper();
 });

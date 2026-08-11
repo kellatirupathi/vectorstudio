@@ -1,37 +1,45 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { IMAGE_TRANSFORM_MODE, STORAGE_DIR, WORKER_CONCURRENCY } from "../config.js";
+import { IMAGE_TRANSFORM_MODE, WORKER_CONCURRENCY } from "../config.js";
 import { downloadImageBytes, isValidUrl, runWithConcurrency, toCsv } from "../lib/utils.js";
-import type { JobItem, JobResultRow } from "../types.js";
+import type { BatchResultRow, ProcessItem } from "../types.js";
 import { uploadPngToCloudinary, vectorizeImage } from "./imagePipeline.js";
-import { appendError, getResults, recordResult, setJobStatus, updateJob } from "./jobStore.js";
+import {
+  appendError,
+  BATCH_DIR,
+  clearPendingItems,
+  getBatch,
+  getRemainingItems,
+  getResults,
+  loadPendingItems,
+  recordResult,
+  setBatchStatus,
+  updateBatch,
+} from "./batchStore.js";
 import { buildVariantPrompt, getPosePreset } from "./prompts.js";
 
-export const jobDir = (jobId: string): string => path.join(STORAGE_DIR, "jobs", jobId);
+export const resultCsvPath = (): string => path.join(BATCH_DIR, "result.csv");
 
-export const ensureJobDirs = (jobId: string): { dir: string; inputsDir: string } => {
-  const dir = jobDir(jobId);
-  const inputsDir = path.join(dir, "inputs");
+export const ensureBatchDirs = (): { dir: string; inputsDir: string } => {
+  const inputsDir = path.join(BATCH_DIR, "inputs");
   fs.mkdirSync(inputsDir, { recursive: true });
-  return { dir, inputsDir };
+  return { dir: BATCH_DIR, inputsDir };
 };
 
-export const resultCsvPath = (jobId: string): string => path.join(jobDir(jobId), "result.csv");
-
-const writeResultCsv = (jobId: string): string => {
-  const rows = getResults(jobId).map((row) => ({
+const writeResultCsv = (): string => {
+  const rows = getResults().map((row) => ({
     input_image: row.inputImage,
     generated_image: row.status === "success" ? row.generatedImage : "",
   }));
 
-  const target = resultCsvPath(jobId);
+  const target = resultCsvPath();
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, toCsv(rows, ["input_image", "generated_image"]), "utf8");
   return target;
 };
 
-const readInputBytes = async (item: JobItem): Promise<Buffer> => {
+const readInputBytes = async (item: ProcessItem): Promise<Buffer> => {
   if (item.source === "invalid_upload") throw new Error("Uploaded file is empty.");
 
   if (item.source === "upload") {
@@ -51,7 +59,7 @@ const readInputBytes = async (item: JobItem): Promise<Buffer> => {
   throw new Error("Unsupported input source.");
 };
 
-const processItem = async (jobId: string, item: JobItem): Promise<JobResultRow> => {
+const processItem = async (item: ProcessItem): Promise<BatchResultRow> => {
   const posePreset = getPosePreset(item.variantIndex);
   const { normalizedIndex, variantName, promptText } = buildVariantPrompt({
     variantIndex: item.variantIndex,
@@ -67,7 +75,7 @@ const processItem = async (jobId: string, item: JobItem): Promise<JobResultRow> 
     ? "generate_from_reference"
     : IMAGE_TRANSFORM_MODE;
 
-  const row: JobResultRow = {
+  const row: BatchResultRow = {
     index: item.index,
     inputImage: item.inputImage,
     generatedImage: "",
@@ -95,36 +103,34 @@ const processItem = async (jobId: string, item: JobItem): Promise<JobResultRow> 
         : null,
     });
 
-    row.generatedImage = await uploadPngToCloudinary(bytes, jobId, item.index);
+    row.generatedImage = await uploadPngToCloudinary(bytes, "batch", item.index);
     row.status = "success";
     row.model = usedModel;
   } catch (error) {
     row.error = error instanceof Error ? error.message : String(error);
-    appendError(jobId, `${item.inputImage} [variant_${normalizedIndex}_${variantName}]`, row.error);
+    appendError(`${item.inputImage} [variant_${normalizedIndex}_${variantName}]`, row.error);
   }
 
   return row;
 };
 
-/** Run the whole job. Resolves once every item is processed and the CSV written. */
-export const runJob = async (jobId: string, items: JobItem[]): Promise<void> => {
+export const runBatch = async (items: ProcessItem[]): Promise<void> => {
   try {
-    setJobStatus(jobId, "processing");
-    updateJob(jobId, { resultCsvPath: writeResultCsv(jobId) });
+    setBatchStatus("processing");
+    updateBatch({ resultCsvPath: writeResultCsv() });
 
     if (items.length === 0) {
-      updateJob(jobId, { resultCsvPath: writeResultCsv(jobId) });
-      setJobStatus(jobId, "completed");
+      updateBatch({ resultCsvPath: writeResultCsv() });
+      setBatchStatus("completed");
+      clearPendingItems();
       return;
     }
 
     await runWithConcurrency(items, WORKER_CONCURRENCY, async (item) => {
-      let row: JobResultRow;
+      let row: BatchResultRow;
       try {
-        row = await processItem(jobId, item);
+        row = await processItem(item);
       } catch (error) {
-        // processItem handles its own failures; this guards against a crash so
-        // one bad item cannot abort the remaining work.
         row = {
           index: item.index,
           inputImage: item.inputImage,
@@ -138,33 +144,54 @@ export const runJob = async (jobId: string, items: JobItem[]): Promise<void> => 
           poseVariationEnabled: item.poseVariationEnabled,
           posePresetName: "",
         };
-        appendError(jobId, item.inputImage, row.error);
+        appendError(item.inputImage, row.error);
       }
 
-      recordResult(jobId, row);
+      recordResult(row);
       try {
-        writeResultCsv(jobId); // keep the live CSV current
+        writeResultCsv();
       } catch {
         /* non-fatal */
       }
       return row;
     });
 
-    updateJob(jobId, { resultCsvPath: writeResultCsv(jobId) });
-    setJobStatus(jobId, "completed");
+    updateBatch({ resultCsvPath: writeResultCsv() });
+    setBatchStatus("completed");
+    clearPendingItems();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    appendError(jobId, "__job__", message);
-    updateJob(jobId, { failureReason: message });
-    setJobStatus(jobId, "failed");
+    appendError("__batch__", message);
+    updateBatch({ failureReason: message });
+    setBatchStatus("failed");
   }
 };
 
-/** Fire-and-forget wrapper so the HTTP request returns immediately. */
-export const runJobInBackground = (jobId: string, items: JobItem[]): void => {
-  void runJob(jobId, items).catch((error) => {
-    console.error(
-      JSON.stringify({ level: "ERROR", message: "Job thread failed", jobId, error: String(error) }),
-    );
+export const runBatchInBackground = (items: ProcessItem[]): void => {
+  void runBatch(items).catch((error) => {
+    console.error(JSON.stringify({ level: "ERROR", message: "Batch failed", error: String(error) }));
   });
+};
+
+export const resumeBatchIfNeeded = (): void => {
+  const batch = getBatch();
+  if (!batch || batch.status !== "processing") return;
+
+  const items = loadPendingItems();
+  const remaining = getRemainingItems(items);
+  if (remaining.length === 0) {
+    setBatchStatus("completed");
+    clearPendingItems();
+    return;
+  }
+
+  console.log(
+    JSON.stringify({
+      level: "INFO",
+      message: "Resuming interrupted batch",
+      remaining: remaining.length,
+      total: batch.total,
+    }),
+  );
+  runBatchInBackground(remaining);
 };

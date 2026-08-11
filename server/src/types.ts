@@ -1,8 +1,8 @@
-export type JobStatus = "queued" | "processing" | "completed" | "failed";
+export type BatchStatus = "queued" | "processing" | "completed" | "failed" | "idle";
 
 export type ItemSource = "upload" | "url" | "invalid_upload";
 
-export type JobItem = {
+export type ProcessItem = {
   index: number;
   inputImage: string;
   source: ItemSource;
@@ -16,7 +16,7 @@ export type JobItem = {
   poseStrength: string;
 };
 
-export type JobResultRow = {
+export type BatchResultRow = {
   index: number;
   inputImage: string;
   generatedImage: string;
@@ -30,16 +30,14 @@ export type JobResultRow = {
   posePresetName: string;
 };
 
-export type JobError = {
+export type BatchError = {
   inputImage: string;
   errorMessage: string;
   timestamp: string;
 };
 
-export type JobRecord = {
-  jobId: string;
-  name: string;
-  status: JobStatus;
+export type BatchRecord = {
+  status: Exclude<BatchStatus, "idle">;
   total: number;
   processed: number;
   succeeded: number;
@@ -56,7 +54,18 @@ export type JobRecord = {
   selectedPoseVariationEnabled: boolean;
   selectedPoseStrength: string;
   resultCsvPath?: string;
-  results: Map<number, JobResultRow>;
-  errors: JobError[];
-  expiresAt: number;
+  results: Map<number, BatchResultRow>;
+  errors: BatchError[];
 };
+
+/** @deprecated use BatchStatus */
+export type JobStatus = Exclude<BatchStatus, "idle">;
+
+/** @deprecated use ProcessItem */
+export type JobItem = ProcessItem;
+
+/** @deprecated use BatchResultRow */
+export type JobResultRow = BatchResultRow;
+
+/** @deprecated use BatchError */
+export type JobError = BatchError;

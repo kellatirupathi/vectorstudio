@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -15,14 +14,20 @@ import {
   OPENAI_IMAGE_MODEL,
 } from "../config.js";
 import { parseInputLinksCsv, parseUrlsText, sanitizeFilename } from "../lib/utils.js";
-import { ensureJobDirs, resultCsvPath, runJobInBackground } from "../services/jobRunner.js";
-import { createJob, getJob, getResults, getStats, listJobs } from "../services/jobStore.js";
-import type { JobItem } from "../types.js";
+import { ensureBatchDirs, resultCsvPath, runBatchInBackground } from "../services/batchRunner.js";
+import {
+  clearBatch,
+  createBatch,
+  getBatch,
+  getResults,
+  isBatchActive,
+  savePendingItems,
+} from "../services/batchStore.js";
+import type { ProcessItem } from "../types.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-/** Random sample without replacement — mirrors Python's random.sample. */
 const sampleVariants = (count: number): number[] => {
   const pool = Array.from({ length: MAX_VARIANTS_COUNT }, (_, i) => i + 1);
   for (let i = pool.length - 1; i > 0; i -= 1) {
@@ -32,56 +37,59 @@ const sampleVariants = (count: number): number[] => {
   return pool.slice(0, count);
 };
 
-const serializeJob = (jobId: string, includeRows: boolean) => {
-  const job = getJob(jobId);
-  if (!job) return null;
+const serializeBatch = () => {
+  const batch = getBatch();
+  if (!batch) {
+    return {
+      status: "idle" as const,
+      total: 0,
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      resultReady: false,
+      resultRows: [] as ReturnType<typeof getResults>,
+      errors: [],
+      totalErrors: 0,
+    };
+  }
 
-  const rows = includeRows ? getResults(jobId) : [];
+  const rows = getResults();
+  const csvPath = batch.resultCsvPath ?? resultCsvPath();
   return {
-    jobId: job.jobId,
-    name: job.name,
-    status: job.status,
-    total: job.total,
-    processed: job.processed,
-    succeeded: job.succeeded,
-    failed: job.failed,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    completedAt: job.completedAt ?? null,
-    failureReason: job.failureReason ?? null,
-    selectedModel: job.selectedModel,
-    selectedVariantsCount: job.selectedVariantsCount,
-    selectedTransformMode: job.selectedTransformMode,
-    selectedStylePromptEnabled: job.selectedStylePromptEnabled,
-    selectedPoseVariationEnabled: job.selectedPoseVariationEnabled,
-    selectedPoseStrength: job.selectedPoseStrength,
-    resultReady: Boolean(job.resultCsvPath && fs.existsSync(job.resultCsvPath)),
-    errors: job.errors.slice(-50),
-    totalErrors: job.errors.length,
+    status: batch.status,
+    total: batch.total,
+    processed: batch.processed,
+    succeeded: batch.succeeded,
+    failed: batch.failed,
+    createdAt: batch.createdAt,
+    updatedAt: batch.updatedAt,
+    completedAt: batch.completedAt ?? null,
+    failureReason: batch.failureReason ?? null,
+    selectedModel: batch.selectedModel,
+    selectedVariantsCount: batch.selectedVariantsCount,
+    selectedTransformMode: batch.selectedTransformMode,
+    selectedStylePromptEnabled: batch.selectedStylePromptEnabled,
+    selectedPoseVariationEnabled: batch.selectedPoseVariationEnabled,
+    selectedPoseStrength: batch.selectedPoseStrength,
+    resultReady: Boolean(batch.resultCsvPath && fs.existsSync(csvPath)),
+    errors: batch.errors.slice(-50),
+    totalErrors: batch.errors.length,
     resultRows: rows,
-    totalResultRows: job.results.size,
+    totalResultRows: batch.results.size,
   };
 };
 
-router.get("/stats", (_req, res) => {
-  res.json(getStats());
+router.get("/", (_req, res) => {
+  res.json(serializeBatch());
 });
 
-router.get("/", (_req, res) => {
-  res.json({
-    jobs: listJobs().map((job) => ({
-      jobId: job.jobId,
-      name: job.name,
-      status: job.status,
-      total: job.total,
-      processed: job.processed,
-      succeeded: job.succeeded,
-      failed: job.failed,
-      createdAt: job.createdAt,
-      selectedModel: job.selectedModel,
-      selectedVariantsCount: job.selectedVariantsCount,
-    })),
-  });
+router.delete("/", (_req, res) => {
+  if (isBatchActive()) {
+    res.status(409).json({ error: "A batch is still running. Wait for it to finish." });
+    return;
+  }
+  clearBatch();
+  res.json({ status: "idle" });
 });
 
 router.post(
@@ -91,6 +99,13 @@ router.post(
     { name: "csvFile", maxCount: 1 },
   ]),
   async (req, res) => {
+    if (isBatchActive()) {
+      res.status(409).json({ error: "A batch is already running. Wait for it to finish." });
+      return;
+    }
+
+    clearBatch();
+
     const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
     const body = req.body as Record<string, string>;
 
@@ -131,10 +146,9 @@ router.post(
     }
     const poseVariationEnabled = String(body.poseVariation ?? "false").toLowerCase() === "true";
 
-    const jobId = crypto.randomUUID();
-    const { inputsDir } = ensureJobDirs(jobId);
+    const { inputsDir } = ensureBatchDirs();
 
-    type BaseItem = Omit<JobItem, "variantIndex" | "variantsCount" | "index"> & { index: number };
+    type BaseItem = Omit<ProcessItem, "variantIndex" | "variantsCount" | "index"> & { index: number };
     const baseItems: BaseItem[] = [];
     let counter = 0;
 
@@ -211,9 +225,7 @@ router.post(
       return;
     }
 
-    // Expand each input into one item per variant. URL/CSV inputs get randomized
-    // variant assignment, matching the original pipeline's behaviour.
-    const items: JobItem[] = [];
+    const items: ProcessItem[] = [];
     let expandedIndex = 0;
     for (const base of baseItems) {
       const variantIndexes =
@@ -227,10 +239,7 @@ router.post(
       }
     }
 
-    const defaultName = `Batch ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
-    createJob({
-      jobId,
-      name: (body.name ?? "").trim() || defaultName,
+    createBatch({
       total: items.length,
       selectedModel,
       selectedVariantsCount: variantsCount,
@@ -240,33 +249,25 @@ router.post(
       selectedPoseStrength: poseStrength,
     });
 
-    runJobInBackground(jobId, items);
-    res.status(201).json(serializeJob(jobId, false));
+    savePendingItems(items);
+    runBatchInBackground(items);
+    res.status(201).json(serializeBatch());
   },
 );
 
-router.get("/:jobId", (req, res) => {
-  const payload = serializeJob(req.params.jobId, true);
-  if (!payload) {
-    res.status(404).json({ error: "Job not found" });
-    return;
-  }
-  res.json(payload);
-});
-
-router.get("/:jobId/result.csv", (req, res) => {
-  const job = getJob(req.params.jobId);
-  if (!job) {
-    res.status(404).json({ error: "Job not found" });
+router.get("/result.csv", (_req, res) => {
+  const batch = getBatch();
+  if (!batch) {
+    res.status(404).json({ error: "No batch results yet." });
     return;
   }
 
-  const target = job.resultCsvPath ?? resultCsvPath(job.jobId);
+  const target = batch.resultCsvPath ?? resultCsvPath();
   if (!fs.existsSync(target)) {
     res.status(409).json({ error: "Result CSV is not ready yet" });
     return;
   }
-  res.download(target, `${job.jobId}_result.csv`);
+  res.download(target, "vector_results.csv");
 });
 
 export default router;

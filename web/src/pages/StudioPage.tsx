@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProgressBar, StatusPill } from "../components/ui";
 import {
-  createJob,
+  clearBatch,
   downloadCsv,
-  fetchJob,
+  fetchBatch,
   getAccessToken,
   setAccessToken,
-  type JobDetail,
+  startBatch,
+  type BatchState,
 } from "../lib/api";
 
 type InputMode = "upload" | "urls" | "csv";
@@ -19,6 +20,9 @@ const MODES: Array<{ value: InputMode; label: string }> = [
 ];
 
 const MAX_PROMPT_CHARS = 1000;
+
+const isActive = (status: BatchState["status"]): boolean =>
+  status === "queued" || status === "processing";
 
 export const StudioPage = (): JSX.Element => {
   const imagesRef = useRef<HTMLInputElement>(null);
@@ -39,8 +43,7 @@ export const StudioPage = (): JSX.Element => {
 
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [job, setJob] = useState<JobDetail | null>(null);
+  const [batch, setBatch] = useState<BatchState | null>(null);
   const [downloading, setDownloading] = useState(false);
 
   const urlCount = useMemo(
@@ -55,30 +58,34 @@ export const StudioPage = (): JSX.Element => {
     setError("");
   };
 
-  const loadJob = useCallback(async (jobId: string): Promise<void> => {
+  const loadBatch = useCallback(async (): Promise<void> => {
     try {
-      setJob(await fetchJob(jobId));
+      const state = await fetchBatch();
+      setBatch(state.status === "idle" ? null : state);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     }
   }, []);
 
   useEffect(() => {
-    if (!activeJobId) return;
-    void loadJob(activeJobId);
-  }, [activeJobId, loadJob]);
+    if (!tokenSaved) return;
+    void loadBatch();
+  }, [tokenSaved, loadBatch]);
 
   useEffect(() => {
-    if (!activeJobId || !job) return;
-    if (job.status === "completed" || job.status === "failed") return;
-    const timer = setInterval(() => void loadJob(activeJobId), 2500);
+    if (!batch || !isActive(batch.status)) return;
+    const timer = setInterval(() => void loadBatch(), 2500);
     return () => clearInterval(timer);
-  }, [activeJobId, job, loadJob]);
+  }, [batch, loadBatch]);
 
-  const resetBatch = (): void => {
-    setActiveJobId(null);
-    setJob(null);
+  const resetForm = async (): Promise<void> => {
     setError("");
+    try {
+      await clearBatch();
+    } catch {
+      /* ignore if already idle */
+    }
+    setBatch(null);
     setSubmitting(false);
     if (imagesRef.current) imagesRef.current.value = "";
     if (csvRef.current) csvRef.current.value = "";
@@ -125,9 +132,7 @@ export const StudioPage = (): JSX.Element => {
 
     setSubmitting(true);
     try {
-      const created = await createJob(formData);
-      setActiveJobId(created.jobId);
-      setJob(created);
+      setBatch(await startBatch(formData));
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : String(submitError));
     } finally {
@@ -136,10 +141,9 @@ export const StudioPage = (): JSX.Element => {
   };
 
   const handleDownload = async (): Promise<void> => {
-    if (!activeJobId) return;
     setDownloading(true);
     try {
-      await downloadCsv(activeJobId);
+      await downloadCsv();
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : String(downloadError));
     } finally {
@@ -147,7 +151,7 @@ export const StudioPage = (): JSX.Element => {
     }
   };
 
-  const formLocked = Boolean(activeJobId && job && job.status !== "completed" && job.status !== "failed");
+  const formLocked = Boolean(batch && isActive(batch.status));
 
   return (
     <div className="studio">
@@ -344,36 +348,36 @@ export const StudioPage = (): JSX.Element => {
                 {submitting ? "Starting…" : "Start vectorizing"}
               </button>
             ) : null}
-            {job && (job.status === "completed" || job.status === "failed") ? (
-              <button type="button" className="btn btn-ghost" onClick={resetBatch}>
+            {batch && (batch.status === "completed" || batch.status === "failed") ? (
+              <button type="button" className="btn btn-ghost" onClick={() => void resetForm()}>
                 New batch
               </button>
             ) : null}
           </div>
         </section>
 
-        {job ? (
+        {batch ? (
           <section className="panel panel-results">
             <div className="results-head">
               <div>
                 <h2 className="panel-heading">Progress</h2>
-                <StatusPill status={job.status} />
+                <StatusPill status={batch.status} />
               </div>
               <button
                 type="button"
                 className="btn btn-success btn-sm"
-                disabled={!job.resultReady || downloading}
+                disabled={!batch.resultReady || downloading}
                 onClick={() => void handleDownload()}
               >
                 {downloading ? "Preparing…" : "Download CSV"}
               </button>
             </div>
 
-            <ProgressBar processed={job.processed} total={job.total} status={job.status} />
+            <ProgressBar processed={batch.processed} total={batch.total} status={batch.status} />
 
-            {job.failureReason ? <div className="alert error">{job.failureReason}</div> : null}
+            {batch.failureReason ? <div className="alert error">{batch.failureReason}</div> : null}
 
-            {job.resultRows.length > 0 ? (
+            {batch.resultRows.length > 0 ? (
               <div className="table-wrap">
                 <table className="table">
                   <thead>
@@ -384,7 +388,7 @@ export const StudioPage = (): JSX.Element => {
                     </tr>
                   </thead>
                   <tbody>
-                    {job.resultRows.map((row) => (
+                    {batch.resultRows.map((row) => (
                       <tr key={row.index}>
                         <td>
                           <span className="truncate" title={row.inputImage}>

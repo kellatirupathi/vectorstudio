@@ -1,6 +1,6 @@
-import type { JobStatus } from "../lib/api";
+import type { BatchStatus } from "../lib/api";
 
-export const StatusPill = ({ status }: { status: JobStatus | "success" | "failed" }): JSX.Element => (
+export const StatusPill = ({ status }: { status: BatchStatus | "success" | "failed" }): JSX.Element => (
   <span className={`pill ${status}`}>{status}</span>
 );
 
@@ -11,7 +11,7 @@ export const ProgressBar = ({
 }: {
   processed: number;
   total: number;
-  status: JobStatus;
+  status: BatchStatus;
 }): JSX.Element => {
   const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
   const tone = status === "completed" ? "completed" : status === "failed" ? "failed" : "";
